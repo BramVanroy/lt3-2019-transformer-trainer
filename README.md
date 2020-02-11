@@ -76,7 +76,9 @@ by typing
 screen -rad myscreenname
 ```
 
-You can completely terminate a screen by typing `exit`.
+You can completely terminate a screen by typing `exit`. (But remember  that this is the same command as for exiting a
+virtual environment. So if you are inside a screen and inside a virtual environment in that screen, you have to `exit`
+twice.)
 
 After installation of the virtual environment, you can run the script on multiple GPUs on Weoh. This is great, because
 PyTorch scales really well - meaning that training will be a lot faster.
