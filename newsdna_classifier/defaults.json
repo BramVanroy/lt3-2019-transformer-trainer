@@ -1,0 +1,35 @@
+{
+  "model": {
+    "freeze": null,
+    "layers": [-1],
+    "weights": "default",
+    "activation": null,
+    "pre_classifier": 0,
+    "dropout": 0,
+    "max_seq_len": 512
+  },
+  "training": {
+    "task": "regression",
+    "batch_size": 64,
+    "seed": null,
+    "fp16": null,
+    "f1_average": "auto",
+    "patience": 5,
+    "num_labels": 1,
+    "label_weights": [],
+    "sep": "\t",
+    "target_names": null
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "lr": 5e-05,
+    "eps": 1e-08,
+    "no_decay": ["bias", "LayerNorm.bias", "LayerNorm.weight"],
+    "weight_decay": 0.01
+
+  },
+  "scheduler": {
+    "name": "ReduceLROnPlateau",
+    "patience": 3
+  }
+}
