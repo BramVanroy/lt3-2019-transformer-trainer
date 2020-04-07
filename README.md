@@ -1,7 +1,9 @@
 Transformers classification
 ===========================
 
-Documentation for in-house usage at LT3.
+**Code will not be updated. This is legacy code that works perfectly fine, but that lacks good documentation. We are working on a great interface to create your own Trainers over at [HuggingFace](https://github.com/huggingface/transformers). This repository was made public to showcase how to allow for a configurable user experience, using automatic mixed precision, using distributed learning, using early stopping, and so on.**
+
+Remainder of the documentation is intended for in-house usage at LT3. 
 
 Requirements
 ------------
@@ -10,7 +12,7 @@ Requirements
 page on how to install torch for our environment. (You don't need to install torchvision.) Weoh has CUDA10.1 installed.
 If you run into issues with the torch installation, you can come see me or ask Michaël. This is likely due to the default
 CUDA version not being CUDA10.1.
-- Apart from PyTorch you also need to install: 
+- Apart from PyTorch you also need: 
   - pandas
   - sklearn
   - scipy
