@@ -4,10 +4,12 @@ import logging
 import pandas as pd
 import torch
 import torch.distributed as dist
-from torch.nn import MSELoss, CrossEntropyLoss, Softmax
+from torch import Tensor
+from torch.nn import MSELoss, CrossEntropyLoss, Softmax, BCEWithLogitsLoss, Sigmoid
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
+import numpy as np
 
 try:
     from apex import amp
@@ -47,6 +49,8 @@ class TransformerTrainer:
         self.batch_size = self.topts['batch_size']
         self.fp16 = self.topts['fp16']
         self.num_labels = self.topts['num_labels']
+        self.multi_label = bool(self.topts['multi_label'])
+        self.task = self.topts['task']
 
         # When the model is wrapped as DistributedDataParallel,
         # its properties are not overtly available. Use .module to access them
@@ -56,27 +60,47 @@ class TransformerTrainer:
             self.tokenizer = model.module.tokenizer_wrapper
 
         self._set_data_loaders()
-        if self.num_labels == 1:
+        if self.task == 'regression':
             self.criterion = MSELoss().to(self.device)
         else:
-            if self.topts['label_weights']:
-                self.criterion = CrossEntropyLoss(weight=torch.tensor(self.topts['label_weights'])).to(self.device)
-            else:
-                self.criterion = CrossEntropyLoss().to(self.device)
+            weights = self.topts['label_weights'] if "label_weights" in self.topts else None
 
-        self.softmax = Softmax(dim=1).to(self.device) if self.num_labels > 1 else None
+            if self.multi_label:
+                self.criterion = BCEWithLogitsLoss(weight=torch.tensor(weights) if weights else None).to(self.device)
+            else:
+                self.criterion = CrossEntropyLoss(weight=torch.tensor(weights) if weights else None).to(self.device)
+
+        self.softmax = Softmax(dim=1).to(self.device) if self.task == 'classification' else None
+        self.sigmoid = Sigmoid().to(self.device) if self.task == 'classification' else None
         self.performer = Performance()
 
     def _prepare_lines(self, data, labels=False):
         """ Basic line preparation, strips away new lines.
             Can also prepare labels as the expected tensor type"""
+        if isinstance(data, Tensor):
+            return data
+
         if labels:
             # For regression, cast to float (FloatTensor)
             # For classification, cast to int (LongTensor)
-            if self.num_labels == 1:
-                out = torch.FloatTensor([float(item.rstrip()) for item in data])
+            if self.task == 'regression':
+                if self.num_labels == 1:
+                    out = torch.FloatTensor([float(item.rstrip()) for item in data])
+                else:
+                    out = []
+                    for item in data:
+                        label_ml = [float(i) for i in item.rstrip().split(',')]
+                        out.append(label_ml)
+                    out = torch.FloatTensor(out)
             else:
-                out = torch.LongTensor([int(item.rstrip()) for item in data])
+                if not self.multi_label:
+                    out = torch.LongTensor([int(item.rstrip()) for item in data])
+                else:
+                    out = []
+                    for item in data:
+                        label_ml = [int(i) for i in item.rstrip().split(',')]
+                        out.append(label_ml)
+                    out = torch.LongTensor(out)
         else:
             out = [item.rstrip() for item in data]
 
@@ -118,7 +142,7 @@ class TransformerTrainer:
             if inference:
                 sentence_ids = data['id'].to(self.device)
             else:
-                labels = data['label'].to(self.device)
+                labels = self._prepare_lines(data['label'], labels=True).to(self.device)
 
             encoded_inputs['input_ids'] = encoded_inputs['input_ids'].to(self.device)
             encoded_inputs['attention_mask'] = encoded_inputs['attention_mask'].to(self.device)
@@ -137,16 +161,30 @@ class TransformerTrainer:
 
                 raise RuntimeError()
 
-            if self.num_labels == 1:
+            if self.task == 'regression':
                 preds = preds.squeeze()
                 if not inference:
-                    loss = self.criterion(preds.view(-1), labels.view(-1)).unsqueeze(0)
-
+                    if self.num_labels == 1:
+                        loss = self.criterion(preds.view(-1).to(self.device, dtype=torch.float64),
+                                              labels.view(-1).to(self.device, dtype=torch.float64)).unsqueeze(0)
+                    else:
+                        loss = self.criterion(preds.to(self.device, dtype=torch.float64),
+                                              labels.to(self.device, dtype=torch.float64)).unsqueeze(0)
             else:
                 if not inference:
-                    loss = self.criterion(preds, labels).unsqueeze(0)
-                probs = self.softmax(preds)
-                preds = torch.topk(probs, 1).indices.squeeze()
+                    if self.multi_label:
+                        loss = self.criterion(preds, labels.float()).unsqueeze(0)
+                    else:
+                        loss = self.criterion(preds, labels).unsqueeze(0)
+
+                if not self.multi_label:
+                    probs = self.softmax(preds)
+                    preds = torch.topk(probs, 1).indices.squeeze()
+                else:
+                    preds = self.sigmoid(preds)
+                    probs = preds
+                    preds = preds > 0.5
+                    preds = preds.squeeze()
 
             # 3. Optimise during training
             if do == 'train' and not inference:
@@ -160,6 +198,8 @@ class TransformerTrainer:
             # 4. Save results
             if inference:
                 self.performer.update('sentence_ids', do, sentence_ids)
+                if self.task == 'classification':
+                    self.performer.update('probs', do, probs)
             else:
                 self.performer.update('labels', do, labels)
                 self.performer.update('losses', do, loss)
@@ -263,14 +303,38 @@ class TransformerTrainer:
 
         self._process('test', inference=True)
         self.performer.gather_cat('test')
-        pred_type = float if self.topts['task'] == 'regression' else int
-        data = {
-            'id': self.performer.gathered['test']['sentence_ids'].numpy().astype(int),
-            'pred': self.performer.gathered['test']['preds'].numpy().astype(pred_type)
-        }
+
+        if self.task == 'regression':
+            if not self.multi_label:
+                data = {
+                    'pred': self.performer.gathered['test']['preds'].numpy().astype(float)
+                }
+            else:
+                pred = self.performer.gathered['test']['preds'].numpy().tolist()
+                new_pred = [','.join([str(float(instance)) for instance in label]) for label in pred]
+                data = {
+                    'pred': new_pred
+                }
+        else:
+            if not self.multi_label:
+                data = {
+                    'pred': self.performer.gathered['test']['preds'].numpy().astype(int)
+                }
+            else:
+                pred = self.performer.gathered['test']['preds'].numpy().tolist()
+                prob = self.performer.gathered['test']['probs'].numpy().tolist()
+                new_pred = [','.join([str(int(instance)) for instance in label]) for label in pred]
+                new_prob = [','.join([str(float(instance)) for instance in label]) for label in prob]
+
+                data = {
+                    'pred': new_pred,
+                    'prob': new_prob
+                }
+
+        data["id"] = self.performer.gathered['test']['sentence_ids'].numpy().astype(int)
 
         df = pd.DataFrame.from_dict(data)
-        df.to_csv('predictions.csv', index=False)
+        df.to_csv(self.topts['pred_output_path'], index=False)
 
     def test(self, checkpoint_f):
         """ Wraps testing a given model. Actual testing is done in `self._process()`. """

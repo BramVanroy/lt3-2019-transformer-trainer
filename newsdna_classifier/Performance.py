@@ -25,6 +25,8 @@ class Performance:
 
         self.metric_name2nd = self.topts['metric_name2nd']
         self.num_labels = self.topts['num_labels']
+        self.multi_label = bool(self.topts['multi_label'])
+        self.task = self.topts['task']
         self.patience = self.topts['patience']
 
         self.min_valid_loss = np.inf
@@ -84,7 +86,7 @@ class Performance:
         if done_training:
             fig = self._plot_training()
 
-        return avg_valid_loss, valid_2nd_metric[0] if self.num_labels == 1 else valid_2nd_metric, fig, save_model, done_training
+        return avg_valid_loss, valid_2nd_metric, fig, save_model, done_training
 
     def _evaluate_2nd_metric(self, partition):
         """ Evaluates results of the 2nd metric. Pearson for regression, f1 for classification. """
@@ -92,10 +94,20 @@ class Performance:
         # return None in that case
         with np.errstate(all='raise'):
             try:
-                if self.num_labels == 1:
+                if self.task == 'regression':
                     # Returns a tuple: (r, p-value)
-                    metric_res = pearsonr(self.gathered[partition]['labels'],
-                                          self.gathered[partition]['preds'])
+                    if self.num_labels == 1:
+                        metric_res = pearsonr(self.gathered[partition]['labels'],
+                                              self.gathered[partition]['preds'])[0]
+                    else:
+                        pearsonrs = []
+                        for i in range(self.num_labels):
+                            labels_i = self.gathered[partition]['labels'][:, i].tolist()
+                            preds_i = self.gathered[partition]['preds'][:, i].tolist()
+                            r_i = pearsonr(labels_i, preds_i)
+                            pearsonrs.append(r_i[0])
+                        # Average pearson-r of all labels
+                        metric_res = np.mean(pearsonrs)
                 else:
                     # Returns a float
                     metric_res = f1_score(self.gathered[partition]['labels'],
@@ -111,7 +123,7 @@ class Performance:
         test_2nd_metric = self._evaluate_2nd_metric('test')
 
         report = None
-        if self.num_labels > 1:
+        if self.task == 'classification':
             report = classification_report(self.gathered['test']['labels'],
                                            self.gathered['test']['preds'],
                                            target_names=self.topts['target_names'])
@@ -119,17 +131,23 @@ class Performance:
 
         # If regression, return the first item of the tuple (r, p-value)
         # If classification, return number (f1)
-        return avg_test_loss, test_2nd_metric[0] if self.num_labels == 1 else test_2nd_metric, report
+        return avg_test_loss, test_2nd_metric if self.task == 'regression' else test_2nd_metric, report
 
     def _init_tensors(self):
         tensor_constructor = torch.cuda.FloatTensor if self.device.type == 'cuda' else torch.FloatTensor
         self._tensors = {part: defaultdict(tensor_constructor) for part in ('test', 'train', 'valid')}
 
-        if self.num_labels > 1:
+        if self.task == 'classification':
             # for classification, we need a LongTensor rather than float
             for part in ('test', 'train', 'valid'):
-                self._tensors[part]['labels'] = torch.cuda.LongTensor([]) if self.device.type == 'cuda' else torch.LongTensor([])
-                self._tensors[part]['preds'] = torch.cuda.LongTensor([]) if self.device.type == 'cuda' else torch.LongTensor([])
+                if not self.multi_label:
+                    self._tensors[part]['labels'] = torch.cuda.LongTensor([]) if self.device.type == 'cuda' else torch.LongTensor([])
+                    self._tensors[part]['preds'] = torch.cuda.LongTensor([]) if self.device.type == 'cuda' else torch.LongTensor([])
+                    if part == 'test':
+                        self._tensors[part]['probs'] = torch.cuda.FloatTensor([]) if self.device.type == 'cuda' else torch.FloatTensor([])
+                else:
+                    self._tensors[part]['labels'] = torch.cuda.FloatTensor([]) if self.device.type == 'cuda' else torch.FloatTensor([])
+                    self._tensors[part]['preds'] = torch.cuda.FloatTensor([]) if self.device.type == 'cuda' else torch.FloatTensor([])
 
         for part in ('test', 'train', 'valid'):
             self._tensors[part]['sentence_ids'] = torch.cuda.LongTensor([]) if self.device.type == 'cuda' else torch.LongTensor([])
@@ -140,6 +158,7 @@ class Performance:
                 self.gathered[partition] = {
                     'losses': self._gather_cat('losses', partition).cpu(),
                     'labels': self._gather_cat('labels', partition).cpu(),
+                    'sentence_ids': self._gather_cat('sentence_ids', partition).cpu(),
                     'preds': self._gather_cat('preds', partition).cpu()
                 }
         else:
@@ -177,5 +196,10 @@ class Performance:
         # with batch_size 1, the prediction tensor might be zero-dimensions
         if not tensor.size():
             tensor = tensor.unsqueeze(0)
-
-        self._tensors[partition][attr] = torch.cat((self._tensors[partition][attr], tensor.detach()))
+        if not self.multi_label:
+            self._tensors[partition][attr] = torch.cat((self._tensors[partition][attr], tensor.detach()))
+        else:
+            if attr == 'sentence_ids':
+                self._tensors[partition][attr] = torch.cat((self._tensors[partition][attr], tensor.detach()))
+            else:
+                self._tensors[partition][attr] = torch.cat((self._tensors[partition][attr], tensor.float().detach()))

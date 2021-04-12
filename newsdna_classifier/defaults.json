@@ -9,6 +9,7 @@
     "max_seq_len": 512
   },
   "training": {
+    "multi_label": false,
     "task": "regression",
     "batch_size": 64,
     "seed": null,
@@ -18,7 +19,8 @@
     "num_labels": 1,
     "label_weights": [],
     "sep": "\t",
-    "target_names": null
+    "target_names": null,
+    "pred_output_path": "predictions.csv"
   },
   "optimizer": {
     "name": "AdamW",
