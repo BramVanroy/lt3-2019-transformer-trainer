@@ -38,10 +38,11 @@ class Config(Iterator):
         if self.device.type == 'cuda':
             torch.cuda.set_device(self.device)
 
+
         # Only use fp16 if we're actually running on the GPU
         config['training']['fp16'] = config['training']['fp16'] if self.device.type == 'cuda' else False
-        config['training']['metric_name'] = 'MSE' if config['training']['num_labels'] == 1 else 'CrossEntropy'
-        config['training']['metric_name2nd'] = 'pearson' if config['training']['num_labels'] == 1 else 'f1'
+        config['training']['metric_name'] = 'MSE' if config['training']['task'] == 'regression' else 'CrossEntropy'
+        config['training']['metric_name2nd'] = 'pearson' if config['training']['task'] == 'regression' else 'f1'
         config['training']['f1_average'] = self._set_f1_average(config)
 
         # Save the original config (listified)
