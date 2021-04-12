@@ -1,10 +1,12 @@
+import csv
+
 import pandas as pd
 from torch.utils.data import Dataset
 
 
 class DfDataset(Dataset):
     def __init__(self, fin, sep='\t'):
-        df = pd.read_csv(fin, sep=sep)
+        df = pd.read_csv(fin, sep=sep, quoting=csv.QUOTE_NONE)
         df = df[['id', 'label', 'text']]
         df = df.astype({'id': int})
 
