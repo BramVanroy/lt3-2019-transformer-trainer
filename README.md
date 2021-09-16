@@ -1,12 +1,16 @@
-Transformers classification
-===========================
+Base LT3 Transformer classifier 2019-2020
+=========================================
 
-**Code will not be updated. This is legacy code that works perfectly fine, but that lacks good documentation.
- I recommend using the easily adapatable Trainers over at [HuggingFace](https://github.com/huggingface/transformers).
- This repository was made public to showcase how to allow for a configurable user experience, using automatic mixe
- precision, using distributed learning, using early stopping, and so on.**
+**!!Code will not be updated!!**
 
-Remainder of the documentation is intended for in-house usage at LT3. 
+This is legacy code that works perfectly fine, but that lacks good documentation and 
+that lacks a consistent approach to inference and testing as well as model save/loading.
+I recommend using the easily adapatable Trainers over at [HuggingFace](https://github.com/huggingface/transformers).
+This repository was made public to showcase how to allow for a configurable user experience, using automatic mixed
+precision, using distributed training, using early stopping, and so on.
+
+Remainder of the documentation is intended for in-house usage at LT3. This code has been used for many different research
+topics within LT3.
 
 Requirements
 ------------
