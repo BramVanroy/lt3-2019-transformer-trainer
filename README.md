@@ -127,3 +127,11 @@ Simply **testing** the performance of a model according to the `test` file in th
 ```bash
 python newsdna_classifier/predict.py <your-config-file> --test data/saved/best-model-chkpnt.pth --local_rank 0
 ```
+
+
+Using it in your own work?
+--------------------------
+Great! Glad to hear that this repository has been of use to you. If you publish code based on this repository,
+*always* include the LICENSE file in this repository as per MIT license requirements (and optionally link to this
+repository from your own). Also, if you produce results by use of (a modification of) this repository, please place
+a reference (link) to this repository in your publication.
