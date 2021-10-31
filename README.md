@@ -47,8 +47,8 @@ score (F1 or Pearson).
 Multi-label classification
 --------------------------
 
-Multi-label classification (and regression) was first added by Luna De Bruyne and I later adapted and further improved 
- it to be added to this repository. You can use it by setting the option `multi_label` to `true` in your config file
+Multi-label classification (and regression) was first added by [Luna De Bruyne](https://github.com/LunaDeBruyne). 
+ You can use it by setting the option `multi_label` to `true` in your config file
  under the training options. In such a scenario and when using categorical classification, it is expected that you
  have encoded your categories 0 and 1. Both for regression and classification, you must set `num_labels` to the number
  of labels *per item* that you are predicting, so if you have three categories that are encoded as 0/1, e.g. `1,0,1` 
