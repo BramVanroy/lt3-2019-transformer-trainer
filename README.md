@@ -9,8 +9,7 @@ I recommend using the easily adapatable Trainers over at [HuggingFace](https://g
 This repository was made public to showcase how to allow for a configurable user experience, using automatic mixed
 precision, using distributed training, using early stopping, and so on.
 
-Remainder of the documentation is intended for in-house usage at LT3. This code has been used for many different research
-topics within LT3.
+This code has been used for many different research topics within LT3.
 
 Using it in your own work?
 --------------------------
@@ -23,15 +22,13 @@ Requirements
 ------------
 - At least Python 3.6
 - PyTorch, preferably with CUDA support. Have a look at th PyTorch [Getting Started](https://pytorch.org/get-started/locally/)
-page on how to install torch for our environment. (You don't need to install torchvision or torchaudio.) If you run
-  into issues with the torch installation, you can come see me or ask Michaël. 
+page on how to install torch for our environment. (You don't need to install torchvision or torchaudio.)
 - Apart from PyTorch you also need: 
   - pandas
   - sklearn
   - scipy
   - matplotlib
   - transformers
-
 
 How to use
 ----------
@@ -53,7 +50,6 @@ score (F1 or Pearson).
 
 Multi-label classification
 --------------------------
-
 Multi-label classification (and regression) was first added by [Luna De Bruyne](https://github.com/LunaDeBruyne). 
  You can use it by setting the option `multi_label` to `true` in your config file
  under the training options. In such a scenario and when using categorical classification, it is expected that you
